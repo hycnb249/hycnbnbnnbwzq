@@ -1,0 +1,2306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 五子棋 - Gomoku</title>
+<style>
+:root {
+  --bg: #0a0a1a;
+  --panel-bg: #12122a;
+  --text: #e0e0f0;
+  --accent: #ff6b6b;
+  --accent2: #4ecdc4;
+  --gold: #ffd700;
+  --card-bg: #1a1a3e;
+  --card-border: #2a2a5e;
+  --btn-bg: #252550;
+  --btn-hover: #353570;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ============ LOADING SCREEN ============ */
+#loading-screen {
+  position: fixed; inset: 0; z-index: 9999;
+  background: radial-gradient(ellipse at center, #0a0a2e 0%, #000010 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: opacity 0.6s, visibility 0.6s;
+}
+#loading-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.loading-particles {
+  position: absolute; inset: 0; overflow: hidden;
+}
+.particle {
+  position: absolute; border-radius: 50%;
+  background: var(--accent2);
+  animation: floatUp linear infinite;
+  opacity: 0;
+}
+@keyframes floatUp {
+  0% { transform: translateY(100vh) scale(0); opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.2; }
+  100% { transform: translateY(-10vh) scale(1.5); opacity: 0; }
+}
+.loading-logo {
+  font-size: 72px; font-weight: 900; letter-spacing: 8px;
+  background: linear-gradient(135deg, #ff6b6b, #ffd700, #4ecdc4, #a855f7);
+  background-size: 300% 300%;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 3s ease infinite;
+  text-shadow: none;
+  position: relative; z-index: 1;
+}
+@keyframes gradientShift {
+  0%,100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+.loading-subtitle {
+  font-size: 18px; color: #aab; margin-top: 12px; letter-spacing: 4px; z-index: 1;
+}
+.loading-bar-wrap {
+  width: 320px; height: 4px; background: #1a1a3e; border-radius: 2px;
+  margin-top: 40px; overflow: hidden; z-index: 1;
+}
+.loading-bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #4ecdc4, #a855f7, #ff6b6b);
+  border-radius: 2px;
+  animation: loadBar 2.5s ease-in-out forwards;
+}
+@keyframes loadBar {
+  0% { width: 0%; }
+  30% { width: 35%; }
+  60% { width: 65%; }
+  85% { width: 90%; }
+  100% { width: 100%; }
+}
+.loading-percent { font-size: 14px; color: #888; margin-top: 12px; z-index: 1; }
+
+/* ============ MENU SCREEN ============ */
+#menu-screen {
+  display: none; min-height: 100vh; padding: 30px 20px;
+  background: radial-gradient(ellipse at top, #12122a 0%, #060615 100%);
+}
+#menu-screen.active { display: block; }
+.menu-title {
+  text-align: center; font-size: 42px; font-weight: 900; letter-spacing: 6px;
+  background: linear-gradient(135deg, #ff6b6b, #ffd700, #4ecdc4);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; margin-bottom: 30px;
+}
+.menu-container {
+  max-width: 900px; margin: 0 auto; display: grid;
+  grid-template-columns: 1fr 1fr; gap: 20px;
+}
+@media (max-width: 700px) { .menu-container { grid-template-columns: 1fr; } }
+.menu-card {
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 16px; padding: 24px;
+  backdrop-filter: blur(10px);
+  transition: transform 0.2s, border-color 0.2s;
+}
+.menu-card:hover { border-color: #4a4a8e; }
+.menu-card.full-width { grid-column: 1 / -1; }
+.menu-card h3 {
+  font-size: 18px; margin-bottom: 16px; color: var(--accent2);
+  display: flex; align-items: center; gap: 8px;
+}
+.menu-card h3 .icon { font-size: 22px; }
+
+/* Difficulty buttons */
+.diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.diff-btn {
+  padding: 14px 16px; border: 2px solid var(--card-border); border-radius: 12px;
+  background: var(--btn-bg); color: #ccc; cursor: pointer;
+  font-size: 15px; font-weight: 600; transition: all 0.25s;
+  text-align: center; position: relative; overflow: hidden;
+}
+.diff-btn:hover { border-color: #555; background: var(--btn-hover); transform: translateY(-2px); }
+.diff-btn.selected { border-color: var(--accent); color: #fff; background: #2a1525; }
+.diff-btn .diff-star { color: #ffd700; font-size: 12px; }
+.diff-btn.easy { border-left: 3px solid #4ecdc4; }
+.diff-btn.normal { border-left: 3px solid #ffd700; }
+.diff-btn.hard { border-left: 3px solid #ff6b6b; }
+.diff-btn.hell { border-left: 3px solid #a855f7; }
+
+/* Color picker */
+.color-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.color-preset {
+  width: 36px; height: 36px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; transition: all 0.2s;
+}
+.color-preset:hover { transform: scale(1.15); }
+.color-preset.selected { border-color: #fff; box-shadow: 0 0 12px rgba(255,255,255,0.4); }
+.custom-color-wrap { display: flex; align-items: center; gap: 10px; }
+.custom-color-wrap input[type="color"] {
+  width: 40px; height: 36px; border: none; border-radius: 8px; cursor: pointer; background: none;
+}
+.custom-color-wrap span { font-size: 13px; color: #888; }
+
+/* Board size */
+.size-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.size-btn {
+  padding: 10px 20px; border: 2px solid var(--card-border); border-radius: 10px;
+  background: var(--btn-bg); color: #ccc; cursor: pointer;
+  font-size: 14px; font-weight: 600; transition: all 0.2s;
+}
+.size-btn:hover { border-color: #555; background: var(--btn-hover); }
+.size-btn.selected { border-color: var(--accent2); color: #fff; background: #152530; }
+
+/* First move */
+.first-move-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.first-btn {
+  flex: 1; min-width: 80px; padding: 12px 16px; border: 2px solid var(--card-border);
+  border-radius: 10px; background: var(--btn-bg); color: #ccc; cursor: pointer;
+  font-size: 14px; font-weight: 600; transition: all 0.2s; text-align: center;
+}
+.first-btn:hover { border-color: #555; background: var(--btn-hover); }
+.first-btn.selected { border-color: var(--accent); color: #fff; background: #2a1525; }
+.first-btn.black-btn.selected { border-color: #333; background: #111; color: #fff; }
+.first-btn.white-btn.selected { border-color: #ddd; background: #333; color: #fff; }
+.first-btn.random-btn.selected { border-color: var(--gold); color: #fff; background: #2a2000; }
+
+/* Sound toggle */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.toggle-row span { font-size: 14px; }
+.toggle-switch { position: relative; width: 50px; height: 26px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; inset: 0; background: #333; border-radius: 13px;
+  cursor: pointer; transition: 0.3s;
+}
+.toggle-slider:before {
+  content: ''; position: absolute; width: 20px; height: 20px; left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%; transition: 0.3s;
+}
+input:checked + .toggle-slider { background: var(--accent2); }
+input:checked + .toggle-slider:before { transform: translateX(24px); }
+
+/* Action buttons */
+.action-btns { display: flex; gap: 12px; margin-top: 20px; }
+.btn-primary, .btn-secondary {
+  flex: 1; padding: 16px 24px; border: none; border-radius: 12px;
+  font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s;
+  letter-spacing: 2px;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #ff6b6b, #a855f7);
+  color: #fff; box-shadow: 0 4px 20px rgba(168,85,247,0.3);
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 28px rgba(168,85,247,0.5); }
+.btn-secondary {
+  background: transparent; border: 2px solid var(--accent2); color: var(--accent2);
+}
+.btn-secondary:hover { background: rgba(78,205,196,0.1); transform: translateY(-2px); }
+
+/* ============ GAME SCREEN ============ */
+#game-screen {
+  display: none; min-height: 100vh; padding: 20px;
+  flex-direction: column; align-items: center;
+  background: radial-gradient(ellipse at top, #12122a 0%, #060615 100%);
+}
+#game-screen.active { display: flex; }
+.game-header {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; max-width: 700px; margin-bottom: 12px;
+}
+.game-info {
+  display: flex; align-items: center; gap: 16px; font-size: 15px;
+}
+.game-info .turn-indicator {
+  display: flex; align-items: center; gap: 8px;
+}
+.game-info .piece-dot {
+  width: 20px; height: 20px; border-radius: 50%; display: inline-block;
+  box-shadow: inset -2px -2px 4px rgba(0,0,0,0.5), inset 2px 2px 4px rgba(255,255,255,0.2);
+}
+.piece-dot.black { background: radial-gradient(circle at 35% 35%, #555, #111); }
+.piece-dot.white { background: radial-gradient(circle at 35% 35%, #fff, #ccc); }
+.game-actions { display: flex; gap: 8px; }
+.game-btn {
+  padding: 8px 16px; border: 1px solid var(--card-border); border-radius: 8px;
+  background: var(--btn-bg); color: #ccc; cursor: pointer;
+  font-size: 13px; font-weight: 600; transition: all 0.2s;
+}
+.game-btn:hover { background: var(--btn-hover); border-color: #555; }
+.game-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.game-btn.undo-btn { color: #ff6b6b; }
+.game-btn.back-btn { color: var(--accent2); }
+.game-btn.zoom-btn { font-size: 18px; font-weight: 700; padding: 6px 12px; color: #ffd700; }
+.canvas-wrap {
+  position: relative; border-radius: 16px; overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+canvas { display: block; cursor: pointer; }
+.game-result-overlay {
+  display: none; position: absolute; inset: 0;
+  background: rgba(0,0,0,0.7); flex-direction: column;
+  align-items: center; justify-content: center; z-index: 10;
+}
+.game-result-overlay.show { display: flex; }
+.game-result-text {
+  font-size: 36px; font-weight: 900; letter-spacing: 4px; margin-bottom: 16px;
+}
+.game-result-sub { font-size: 16px; color: #aaa; margin-bottom: 20px; }
+
+/* Move history */
+.move-history {
+  width: 100%; max-width: 700px; margin-top: 10px;
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 10px; padding: 10px 14px; min-height: 36px;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+.move-history .mh-label { font-size: 12px; color: #666; margin-right: 4px; }
+.move-history .mh-item {
+  font-size: 12px; padding: 2px 7px; border-radius: 4px; font-weight: 600;
+  background: #1a1a3e; color: #aaa;
+}
+.move-history .mh-item.black-move { color: #ddd; }
+.move-history .mh-item.white-move { color: #ccc; }
+.move-history .mh-item.last-move { background: #2a2a5e; color: #ffd700; }
+.shortcut-hint { font-size: 11px; color: #555; margin-left: auto; }
+
+/* ============ WATCH SCREEN ============ */
+#watch-screen {
+  display: none; min-height: 100vh; padding: 20px;
+  flex-direction: column; align-items: center;
+  background: radial-gradient(ellipse at top, #12122a 0%, #060615 100%);
+}
+#watch-screen.active { display: flex; }
+.watch-scoreboard {
+  display: flex; gap: 24px; align-items: center; margin-bottom: 16px;
+  font-size: 16px; font-weight: 600;
+}
+.watch-score {
+  text-align: center; padding: 12px 20px; border-radius: 12px;
+  background: var(--card-bg); border: 1px solid var(--card-border);
+}
+.watch-score .score-num { font-size: 32px; font-weight: 900; }
+.watch-score.black-score { color: #ddd; }
+.watch-score.white-score { color: #ddd; }
+.watch-score.draw-score { color: #888; }
+.watch-score .score-num { display: block; }
+.watch-label { font-size: 12px; color: #888; margin-top: 4px; }
+.watch-status { font-size: 14px; color: #aaa; text-align: center; margin-bottom: 8px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0a0a1a; }
+::-webkit-scrollbar-thumb { background: #2a2a5e; border-radius: 3px; }
+
+/* Win line glow */
+@keyframes winGlow {
+  0%,100% { filter: brightness(1); }
+  50% { filter: brightness(1.5); }
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div id="loading-screen">
+  <div class="loading-particles" id="loadingParticles"></div>
+  <div class="loading-logo">五 子 棋</div>
+  <div class="loading-subtitle">A I &nbsp; G O M O K U</div>
+  <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+  <div class="loading-percent" id="loadingPercent">0%</div>
+</div>
+
+<!-- MENU SCREEN -->
+<div id="menu-screen">
+  <div class="menu-title">AI 五 子 棋</div>
+  <div class="menu-container">
+    <!-- Difficulty -->
+    <div class="menu-card">
+      <h3 id="difficultyTitle"><span class="icon">&#x1F3AE;</span> 选择难度</h3>
+      <div class="diff-grid">
+        <button class="diff-btn easy selected" data-diff="0">
+          简单 <span class="diff-star">&#9733;</span>
+        </button>
+        <button class="diff-btn normal" data-diff="1">
+          普通 <span class="diff-star">&#9733;&#9733;</span>
+        </button>
+        <button class="diff-btn hard" data-diff="2">
+          困难 <span class="diff-star">&#9733;&#9733;&#9733;</span>
+        </button>
+        <button class="diff-btn hell" data-diff="3">
+          地狱 <span class="diff-star">&#9733;&#9733;&#9733;&#9733;</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Board Settings -->
+    <div class="menu-card">
+      <h3><span class="icon">&#x1F3A8;</span> 棋盘设置</h3>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:14px;color:#888;margin-bottom:8px;">棋盘大小</div>
+        <div class="size-btns">
+          <button class="size-btn" data-size="13">13&times;13</button>
+          <button class="size-btn selected" data-size="15">15&times;15</button>
+          <button class="size-btn" data-size="17">17&times;17</button>
+          <button class="size-btn" data-size="19">19&times;19</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:14px;color:#888;margin-bottom:8px;">棋盘颜色</div>
+        <div class="color-presets" id="colorPresets">
+          <span class="color-preset selected" data-color="#dcb35c" style="background:#dcb35c" title="经典木色"></span>
+          <span class="color-preset" data-color="#8b6914" style="background:#8b6914" title="深木色"></span>
+          <span class="color-preset" data-color="#c4a882" style="background:#c4a882" title="浅木色"></span>
+          <span class="color-preset" data-color="#a8c8a0" style="background:#a8c8a0" title="竹色"></span>
+          <span class="color-preset" data-color="#d4c5b9" style="background:#d4c5b9" title="大理石色"></span>
+          <span class="color-preset" data-color="#4a6741" style="background:#4a6741" title="翠绿"></span>
+          <span class="color-preset" data-color="#2c3e50" style="background:#2c3e50" title="深蓝灰"></span>
+          <span class="color-preset" data-color="#5d4e37" style="background:#5d4e37" title="胡桃木色"></span>
+          <span class="color-preset" data-color="#e8d5b7" style="background:#e8d5b7" title="奶油色"></span>
+          <span class="color-preset" data-color="#3d2b1f" style="background:#3d2b1f" title="黑檀木色"></span>
+        </div>
+        <div class="custom-color-wrap">
+          <input type="color" id="customBoardColor" value="#dcb35c">
+          <span>自定义颜色</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- First Move -->
+    <div class="menu-card">
+      <h3><span class="icon">&#x265F;</span> 先手设置</h3>
+      <div class="first-move-btns">
+        <button class="first-btn black-btn selected" data-first="black">
+          &#x26AB; 黑棋先手
+        </button>
+        <button class="first-btn white-btn" data-first="white">
+          &#x26AA; 白棋后手
+        </button>
+        <button class="first-btn random-btn" data-first="random">
+          &#x1F3B2; 随机
+        </button>
+      </div>
+      <div id="randomHint" style="font-size:12px;color:#888;margin-top:8px;display:none;">
+        已开启随机黑白子模式
+      </div>
+    </div>
+
+    <!-- Sound Settings -->
+    <div class="menu-card">
+      <h3><span class="icon">&#x1F50A;</span> 音效与规则</h3>
+      <div class="toggle-row">
+        <span>点击音效</span>
+        <label class="toggle-switch"><input type="checkbox" id="clickSoundToggle" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <span>落子音效</span>
+        <label class="toggle-switch"><input type="checkbox" id="placeSoundToggle" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <span>胜利音效</span>
+        <label class="toggle-switch"><input type="checkbox" id="winSoundToggle" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div style="border-top:1px solid var(--card-border);margin:12px 0;padding-top:12px;">
+        <div class="toggle-row">
+          <span>黑棋禁手规则</span>
+          <label class="toggle-switch"><input type="checkbox" id="forbiddenRuleToggle" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div style="font-size:11px;color:#666;margin-top:4px;">
+          三三禁手、四四禁手（仅黑棋受限）
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="menu-card full-width">
+      <div class="action-btns">
+        <button class="btn-primary" id="startGameBtn">&#x2694; 开始游戏</button>
+        <button class="btn-secondary" id="watchAIBtn">&#x1F441; 观战AI</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 密码输入弹窗 -->
+<div id="passwordModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:16px;padding:30px;max-width:360px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.5);">
+    <h3 style="color:var(--accent2);margin-bottom:16px;font-size:18px;">&#x1F510; 请输入密码</h3>
+    <input type="password" id="passwordInput" style="width:100%;padding:12px 16px;border:2px solid var(--card-border);border-radius:10px;background:var(--btn-bg);color:#fff;font-size:16px;outline:none;margin-bottom:16px;" placeholder="请输入密码">
+    <div style="display:flex;gap:10px;">
+      <button id="passwordCancelBtn" style="flex:1;padding:12px;border:2px solid var(--card-border);border-radius:10px;background:var(--btn-bg);color:#ccc;cursor:pointer;font-size:15px;font-weight:600;">取消</button>
+      <button id="passwordConfirmBtn" style="flex:1;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#ff6b6b,#a855f7);color:#fff;cursor:pointer;font-size:15px;font-weight:600;">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 神秘菜单弹窗 -->
+<div id="secretMenuModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:16px;padding:24px;max-width:400px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.5);max-height:90vh;overflow-y:auto;">
+    <h3 style="color:var(--gold);margin-bottom:20px;font-size:20px;text-align:center;letter-spacing:2px;">&#x2728; 神秘菜单</h3>
+    
+    <!-- 无限悔棋 -->
+    <div style="background:rgba(255,215,0,0.05);border:1px solid rgba(255,215,0,0.2);border-radius:10px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="color:#ffd700;font-weight:600;font-size:15px;">&#x267E; 无限悔棋</span>
+        <label class="toggle-switch"><input type="checkbox" id="infiniteUndoToggle"><span class="toggle-slider"></span></label>
+      </div>
+      <div style="font-size:12px;color:#888;">开启后，悔棋次数无限制</div>
+    </div>
+
+    <!-- 关闭禁手规则 -->
+    <div style="background:rgba(255,107,107,0.05);border:1px solid rgba(255,107,107,0.2);border-radius:10px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="color:#ff6b6b;font-weight:600;font-size:15px;">&#x1F6AB; 关闭禁手规则</span>
+        <label class="toggle-switch"><input type="checkbox" id="disableForbiddenToggle"><span class="toggle-slider"></span></label>
+      </div>
+      <div style="font-size:12px;color:#888;">全局关闭黑棋三三/四四禁手（AI和玩家都不受限）</div>
+    </div>
+
+    <!-- 对局调试 -->
+    <div style="background:rgba(78,205,196,0.05);border:1px solid rgba(78,205,196,0.2);border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="color:#4ecdc4;font-weight:600;font-size:15px;margin-bottom:8px;">&#x1F527; 对局调试</div>
+      <div style="font-size:12px;color:#888;margin-bottom:10px;">选择一方后进入调试模式，只有选中方可以落子</div>
+      <div style="display:flex;gap:8px;">
+        <button id="debugBlackBtn" style="flex:1;padding:10px;border:2px solid #333;border-radius:8px;background:#111;color:#ddd;cursor:pointer;font-size:13px;font-weight:600;">&#x26AB; 调试黑棋</button>
+        <button id="debugWhiteBtn" style="flex:1;padding:10px;border:2px solid #ddd;border-radius:8px;background:#333;color:#fff;cursor:pointer;font-size:13px;font-weight:600;">&#x26AA; 调试白棋</button>
+      </div>
+    </div>
+
+    <button id="secretMenuCloseBtn" style="width:100%;padding:12px;border:2px solid var(--card-border);border-radius:10px;background:var(--btn-bg);color:#ccc;cursor:pointer;font-size:15px;font-weight:600;">关闭</button>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game-screen">
+  <div class="game-header">
+    <div class="game-info">
+      <span id="gameTurnText">你的回合</span>
+      <div class="turn-indicator">
+        <span class="piece-dot black" id="turnDot"></span>
+      </div>
+      <span id="moveCount">第 0 手</span>
+    </div>
+    <div class="game-actions">
+      <button class="game-btn zoom-btn" id="gameZoomInBtn" title="放大棋盘">＋</button>
+      <button class="game-btn zoom-btn" id="gameZoomOutBtn" title="缩小棋盘">－</button>
+      <button class="game-btn undo-btn" id="undoBtn" disabled>↩ 悔棋 (<span id="undoCount">3</span>)</button>
+      <button class="game-btn back-btn" id="backToMenuBtn">← 返回菜单</button>
+    </div>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="gameCanvas"></canvas>
+    <div class="game-result-overlay" id="resultOverlay">
+      <div class="game-result-text" id="resultText"></div>
+      <div class="game-result-sub" id="resultSub"></div>
+      <button class="btn-primary" id="playAgainBtn" style="margin-top:8px;">再来一局</button>
+    </div>
+  </div>
+  <div class="move-history" id="moveHistory">
+    <span class="mh-label">棋谱</span>
+    <span class="shortcut-hint">快捷键: U=悔棋</span>
+  </div>
+</div>
+
+<!-- WATCH SCREEN -->
+<div id="watch-screen">
+  <div class="game-header">
+    <div class="game-info">
+      <span>AI 观战模式</span>
+      <span id="watchMoveCount">第 0 手</span>
+    </div>
+    <div class="game-actions">
+      <button class="game-btn zoom-btn" id="watchZoomInBtn" title="放大棋盘">＋</button>
+      <button class="game-btn zoom-btn" id="watchZoomOutBtn" title="缩小棋盘">－</button>
+    </div>
+  </div>
+  <div class="watch-scoreboard">
+    <div class="watch-score black-score">
+      <span class="score-num" id="blackWinCount">0</span>
+      <span class="watch-label">⚫ 黑棋胜</span>
+    </div>
+    <div class="watch-score draw-score">
+      <span class="score-num" id="drawCount">0</span>
+      <span class="watch-label">平局</span>
+    </div>
+    <div class="watch-score white-score">
+      <span class="score-num" id="whiteWinCount">0</span>
+      <span class="watch-label">⚪ 白棋胜</span>
+    </div>
+  </div>
+  <div class="watch-status" id="watchStatus">AI 对战中...</div>
+  <div class="canvas-wrap">
+    <canvas id="watchCanvas"></canvas>
+  </div>
+  <div style="text-align:center;margin-top:12px;">
+    <button class="btn-secondary" id="exitWatchBtn" style="max-width:200px;padding:10px 24px;">← 退出观战</button>
+  </div>
+</div>
+
+<script type="text/javascript">
+// ==================== SOUND MANAGER ====================
+class SoundManager {
+  constructor() {
+    this.ctx = null;
+    this.clickEnabled = true;
+    this.placeEnabled = true;
+    this.winEnabled = true;
+    try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  ensureCtx() {
+    if (!this.ctx) try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    return this.ctx;
+  }
+  playClick() {
+    if (!this.clickEnabled) return;
+    const ctx = this.ensureCtx(); if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.06);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.08);
+  }
+  playPlace() {
+    if (!this.placeEnabled) return;
+    const ctx = this.ensureCtx(); if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    osc.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(220, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.15);
+    filter.type = 'lowpass'; filter.frequency.setValueAtTime(400, ctx.currentTime);
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.2);
+  }
+  playWin() {
+    if (!this.winEnabled) return;
+    const ctx = this.ensureCtx(); if (!ctx) return;
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      const t = ctx.currentTime + i * 0.12;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.18, t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      osc.start(t); osc.stop(t + 0.3);
+    });
+  }
+  playLose() {
+    if (!this.winEnabled) return;
+    const ctx = this.ensureCtx(); if (!ctx) return;
+    const notes = [400, 350, 300, 200];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'triangle';
+      const t = ctx.currentTime + i * 0.15;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.15, t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+      osc.start(t); osc.stop(t + 0.25);
+    });
+  }
+}
+
+const sound = new SoundManager();
+
+// ==================== AI ENGINE ====================
+// 已替换为目标网站的核心算法思路：
+// 候选点生成 + 单点启发式排序 + alpha-beta 搜索 + 迭代加深。
+class GomokuAI {
+  constructor(difficulty, boardSize, options = {}) {
+    this.difficulty = difficulty;
+    this.boardSize = boardSize;
+    this.EMPTY = 0;
+    this.BLACK = 1;
+    this.WHITE = 2;
+    this.dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    this.WIN_SCORE = 1000000000;
+    this.forbiddenRule = options.forbiddenRule !== false; // 禁手规则默认开启
+
+    // 原页面难度：0 简单、1 普通、2 困难、3 地狱
+    // 对应目标网站：EASY、MEDIUM、HARD、EXPERT
+    this.searchConfigs = {
+      HARD: { timeBudgetMs: 800, maxBranching: 10, maxDepth: 8 },
+      EXPERT: { timeBudgetMs: 2200, maxBranching: 12, maxDepth: 12 }
+    };
+  }
+
+  getBestMove(board, player) {
+    const level = this.getLevel();
+    const move = this.chooseMove(board, this.boardSize, player, level);
+    return [move.r, move.c];
+  }
+
+  getLevel() {
+    if (this.difficulty <= 0) return "EASY";
+    if (this.difficulty === 1) return "MEDIUM";
+    if (this.difficulty === 2) return "HARD";
+    return "EXPERT";
+  }
+
+  opponent(player) {
+    return player === this.BLACK ? this.WHITE : this.BLACK;
+  }
+
+  isInside(size, r, c) {
+    return r >= 0 && r < size && c >= 0 && c < size;
+  }
+
+  hasFive(board, size, row, col, player) {
+    for (const [dr, dc] of this.dirs) {
+      let count = 1;
+      let r = row + dr, c = col + dc;
+      while (this.isInside(size, r, c) && board[r][c] === player) {
+        count++;
+        r += dr;
+        c += dc;
+      }
+
+      r = row - dr;
+      c = col - dc;
+      while (this.isInside(size, r, c) && board[r][c] === player) {
+        count++;
+        r -= dr;
+        c -= dc;
+      }
+
+      if (count >= 5) return true;
+    }
+    return false;
+  }
+
+  // 评估某个空点如果落下 player 后的局部价值。
+  evaluatePoint(board, size, row, col, player) {
+    const opponent = this.opponent(player);
+    let score = 0;
+
+    for (const [dr, dc] of this.dirs) {
+      for (let offset = -4; offset <= 0; offset++) {
+        let valid = true;
+        let ownCount = 0;
+        let blockedByOpponent = 0;
+
+        for (let i = 0; i < 5; i++) {
+          const r = row + (offset + i) * dr;
+          const c = col + (offset + i) * dc;
+          if (!this.isInside(size, r, c)) {
+            valid = false;
+            break;
+          }
+
+          const cell = board[r][c];
+          if (cell === player) ownCount++;
+          else if (cell === opponent) blockedByOpponent++;
+        }
+
+        if (!valid || blockedByOpponent > 0) continue;
+
+        switch (ownCount + 1) {
+          case 5:
+            score += 100000;
+            break;
+          case 4:
+            score += 8000;
+            break;
+          case 3:
+            score += 600;
+            break;
+          case 2:
+            score += 50;
+            break;
+          case 1:
+            score += 4;
+            break;
+        }
+      }
+    }
+
+    // 中心点微加权。
+    const center = size / 2;
+    const distance = Math.hypot(row - center, col - center);
+    score += Math.max(0, Math.trunc(5 - distance));
+    return score;
+  }
+
+  evaluateBoard(board, size, player) {
+    const opponent = this.opponent(player);
+    let ownScore = 0;
+    let oppScore = 0;
+
+    for (const [dr, dc] of this.dirs) {
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const endR = r + dr * 4;
+          const endC = c + dc * 4;
+          if (!this.isInside(size, endR, endC)) continue;
+
+          let own = 0;
+          let opp = 0;
+          for (let i = 0; i <= 4; i++) {
+            const cell = board[r + dr * i][c + dc * i];
+            if (cell === player) own++;
+            else if (cell === opponent) opp++;
+          }
+
+          if (own > 0 && opp > 0) continue;
+          if (own > 0) ownScore += this.lineScore(own);
+          else if (opp > 0) oppScore += this.lineScore(opp);
+        }
+      }
+    }
+
+    return ownScore - oppScore;
+  }
+
+  lineScore(count) {
+    switch (count) {
+      case 5:
+        return 100000;
+      case 4:
+        return 10000;
+      case 3:
+        return 1000;
+      case 2:
+        return 100;
+      case 1:
+        return 10;
+      default:
+        return 0;
+    }
+  }
+
+  getCandidateCells(board, size) {
+    const visited = new Set();
+    const candidates = [];
+
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (board[r][c] === this.EMPTY) continue;
+
+        for (let dr = -2; dr <= 2; dr++) {
+          for (let dc = -2; dc <= 2; dc++) {
+            const nr = r + dr;
+            const nc = c + dc;
+            if (!this.isInside(size, nr, nc) || board[nr][nc] !== this.EMPTY) continue;
+
+            const key = nr * size + nc;
+            if (!visited.has(key)) {
+              visited.add(key);
+              candidates.push({ r: nr, c: nc });
+            }
+          }
+        }
+      }
+    }
+
+    if (candidates.length === 0) {
+      candidates.push({
+        r: Math.floor(size / 2),
+        c: Math.floor(size / 2)
+      });
+    }
+
+    return candidates;
+  }
+
+  orderCells(board, size, player, limit) {
+    const opponent = this.opponent(player);
+    let candidates = this.getCandidateCells(board, size)
+      .map(cell => {
+        const attack = this.evaluatePoint(board, size, cell.r, cell.c, player);
+        const defense = this.evaluatePoint(board, size, cell.r, cell.c, opponent);
+        return {
+          cell,
+          weight: attack + Math.trunc(defense * 4 / 3)
+        };
+      })
+      .sort((a, b) => b.weight - a.weight);
+
+    // 如果启用禁手规则且当前是黑棋，过滤掉禁手点
+    if (this.forbiddenRule && player === this.BLACK) {
+      const validCandidates = [];
+      const forbiddenCandidates = [];
+      for (const item of candidates) {
+        const forbidden = this.checkForbiddenMove(board, item.cell.r, item.cell.c, player);
+        if (forbidden.forbidden) {
+          forbiddenCandidates.push(item);
+        } else {
+          validCandidates.push(item);
+        }
+      }
+      // 如果有合法着法，使用合法着法；否则只能走禁手（极端情况）
+      if (validCandidates.length > 0) {
+        candidates = validCandidates;
+      }
+    }
+
+    return candidates
+      .slice(0, limit)
+      .map(x => x.cell);
+  }
+
+  alphaBeta(board, size, aiPlayer, currentPlayer, depth, alpha, beta, deadline, maxBranching) {
+    if (performance.now() > deadline) {
+      return { score: 0, move: null, timedOut: true };
+    }
+
+    if (depth === 0) {
+      return {
+        score: this.evaluateBoard(board, size, aiPlayer),
+        move: null,
+        timedOut: false
+      };
+    }
+
+    let cells = this.orderCells(board, size, currentPlayer, maxBranching);
+    if (cells.length === 0) {
+      return {
+        score: this.evaluateBoard(board, size, aiPlayer),
+        move: null,
+        timedOut: false
+      };
+    }
+
+    const nextPlayer = this.opponent(currentPlayer);
+    const maximizing = currentPlayer === aiPlayer;
+    let bestMove = cells[0];
+
+    if (maximizing) {
+      let bestScore = Number.MIN_SAFE_INTEGER;
+
+      for (const cell of cells) {
+        // 禁手规则：如果当前玩家是黑棋且该点是禁手点，跳过
+        if (this.forbiddenRule && currentPlayer === this.BLACK) {
+          const forbidden = this.checkForbiddenMove(board, cell.r, cell.c, currentPlayer);
+          if (forbidden.forbidden) continue;
+        }
+
+        board[cell.r][cell.c] = currentPlayer;
+        let score;
+        if (this.hasFive(board, size, cell.r, cell.c, currentPlayer)) {
+          score = this.WIN_SCORE - depth;
+        } else {
+          const result = this.alphaBeta(board, size, aiPlayer, nextPlayer, depth - 1, alpha, beta, deadline, maxBranching);
+          if (result.timedOut) {
+            board[cell.r][cell.c] = this.EMPTY;
+            return { score: bestScore, move: bestMove, timedOut: true };
+          }
+          score = result.score;
+        }
+        board[cell.r][cell.c] = this.EMPTY;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = cell;
+        }
+
+        alpha = Math.max(alpha, score);
+        if (alpha >= beta) break;
+      }
+
+      return { score: bestScore, move: bestMove, timedOut: false };
+    }
+
+    let bestScore = Number.MAX_SAFE_INTEGER;
+    for (const cell of cells) {
+      // 禁手规则：如果当前玩家是黑棋且该点是禁手点，跳过
+      if (this.forbiddenRule && currentPlayer === this.BLACK) {
+        const forbidden = this.checkForbiddenMove(board, cell.r, cell.c, currentPlayer);
+        if (forbidden.forbidden) continue;
+      }
+
+      board[cell.r][cell.c] = currentPlayer;
+      let score;
+      if (this.hasFive(board, size, cell.r, cell.c, currentPlayer)) {
+        score = -(this.WIN_SCORE - depth);
+      } else {
+        const result = this.alphaBeta(board, size, aiPlayer, nextPlayer, depth - 1, alpha, beta, deadline, maxBranching);
+        if (result.timedOut) {
+          board[cell.r][cell.c] = this.EMPTY;
+          return { score: bestScore, move: bestMove, timedOut: true };
+        }
+        score = result.score;
+      }
+      board[cell.r][cell.c] = this.EMPTY;
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestMove = cell;
+      }
+
+      beta = Math.min(beta, score);
+      if (alpha >= beta) break;
+    }
+
+    return { score: bestScore, move: bestMove, timedOut: false };
+  }
+
+  searchMove(board, size, player, config) {
+    const deadline = performance.now() + config.timeBudgetMs;
+    const first = this.orderCells(board, size, player, config.maxBranching)[0];
+    if (!first) {
+      return { r: Math.floor(size / 2), c: Math.floor(size / 2) };
+    }
+
+    let best = first;
+    for (let depth = 2; depth <= config.maxDepth; depth += 2) {
+      const result = this.alphaBeta(
+        board,
+        size,
+        player,
+        player,
+        depth,
+        Number.MIN_SAFE_INTEGER,
+        Number.MAX_SAFE_INTEGER,
+        deadline,
+        config.maxBranching
+      );
+
+      if (result.timedOut) break;
+      if (result.move) best = result.move;
+      if (result.score >= this.WIN_SCORE - 100) break;
+    }
+
+    return best;
+  }
+
+  chooseMove(board, size, player, level) {
+    const candidates = this.getCandidateCells(board, size);
+    if (candidates.length === 0) {
+      return { r: Math.floor(size / 2), c: Math.floor(size / 2) };
+    }
+
+    const opponent = this.opponent(player);
+    let ranked = candidates
+      .map(cell => {
+        const offense = this.evaluatePoint(board, size, cell.r, cell.c, player);
+        const defense = this.evaluatePoint(board, size, cell.r, cell.c, opponent);
+        let score = offense + defense * 1.35;
+        if (offense >= 100000) score += 500000;
+        if (defense >= 100000) score += 250000;
+        return { r: cell.r, c: cell.c, offense, defense, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    // 如果启用禁手规则且当前是黑棋，过滤掉禁手点
+    if (this.forbiddenRule && player === this.BLACK) {
+      const validRanked = [];
+      for (const item of ranked) {
+        const forbidden = this.checkForbiddenMove(board, item.r, item.c, player);
+        if (!forbidden.forbidden) {
+          validRanked.push(item);
+        }
+      }
+      if (validRanked.length > 0) {
+        ranked = validRanked;
+      }
+    }
+
+    switch (level) {
+      case "EASY": {
+        if (Math.random() < 0.45) {
+          const random = candidates[Math.floor(Math.random() * candidates.length)];
+          return { r: random.r, c: random.c };
+        }
+        const top = ranked.slice(0, 5);
+        const pick = top[Math.floor(Math.random() * top.length)];
+        return { r: pick.r, c: pick.c };
+      }
+
+      case "MEDIUM": {
+        const best = ranked[0];
+        if (best.offense >= 100000 || best.defense >= 100000) {
+          return { r: best.r, c: best.c };
+        }
+        if (Math.random() < 0.1 && ranked.length > 1) {
+          const top = ranked.slice(0, 3);
+          const pick = top[Math.floor(Math.random() * top.length)];
+          return { r: pick.r, c: pick.c };
+        }
+        return { r: best.r, c: best.c };
+      }
+
+      case "HARD":
+        return this.searchMove(board, size, player, this.searchConfigs.HARD);
+
+      case "EXPERT":
+        return this.searchMove(board, size, player, this.searchConfigs.EXPERT);
+    }
+  }
+
+  // ============ 禁手规则检测 ============
+  // 检测某个方向上的棋型，返回 {count, openEnds, hasGap} 等信息
+  // 检查以 (row,col) 为中心，在 [dr,dc] 方向上 player 的棋型
+  analyzeDirection(board, size, row, col, dr, dc, player) {
+    // 向正方向延伸
+    let posCount = 0;
+    let posBlocked = false;
+    let posGap = false;
+    let r = row + dr, c = col + dc;
+    while (this.isInside(size, r, c)) {
+      if (board[r][c] === player) {
+        if (posGap) break; // 已经有一个空位间隔，再遇到己方棋子则跳过
+        posCount++;
+      } else if (board[r][c] === 0) {
+        if (!posGap && posCount > 0) {
+          posGap = true;
+        } else {
+          break;
+        }
+      } else {
+        posBlocked = true;
+        break;
+      }
+      r += dr; c += dc;
+    }
+    if (!this.isInside(size, r, c) && !posGap) posBlocked = true;
+
+    // 向负方向延伸
+    let negCount = 0;
+    let negBlocked = false;
+    let negGap = false;
+    r = row - dr; c = col - dc;
+    while (this.isInside(size, r, c)) {
+      if (board[r][c] === player) {
+        if (negGap) break;
+        negCount++;
+      } else if (board[r][c] === 0) {
+        if (!negGap && negCount > 0) {
+          negGap = true;
+        } else {
+          break;
+        }
+      } else {
+        negBlocked = true;
+        break;
+      }
+      r -= dr; c -= dc;
+    }
+    if (!this.isInside(size, r, c) && !negGap) negBlocked = true;
+
+    return {
+      total: posCount + negCount + 1, // 包含当前位置的总棋子数
+      posCount, negCount,
+      posBlocked, negBlocked,
+      posGap, negGap
+    };
+  }
+
+  // 检测是否为活三：能形成活四的三
+  // 活三定义：再下一子可以形成活四的三
+  isLiveThree(board, size, row, col, dr, dc, player) {
+    const original = board[row][col];
+    board[row][col] = player;
+
+    let result = false;
+
+    // 方法：在该方向上，对每一个空位尝试填入，看是否形成活四
+    // 如果存在一个空位填入后形成活四，且填入前该方向上是"三"，则为活三
+
+    // 先找到该方向上的所有空位（在一定范围内）
+    for (let offset = -5; offset <= 5; offset++) {
+      const r = row + offset * dr;
+      const c = col + offset * dc;
+      if (!this.isInside(size, r, c)) continue;
+      if (board[r][c] !== 0) continue;
+
+      // 尝试在该空位落子
+      board[r][c] = player;
+
+      // 检查落子后是否形成活四
+      if (this.isLiveFourInDirection(board, size, r, c, dr, dc, player)) {
+        result = true;
+      }
+
+      board[r][c] = 0; // 恢复
+      if (result) break;
+    }
+
+    board[row][col] = original;
+    return result;
+  }
+
+  // 检查以 (row,col) 为中心的某方向上是否有活四
+  // 活四：连续4个己子，两端都是空位
+  isLiveFourInDirection(board, size, row, col, dr, dc, player) {
+    // 找到连续己子的两端
+    let leftR = row, leftC = col;
+    while (this.isInside(size, leftR - dr, leftC - dc) && board[leftR - dr][leftC - dc] === player) {
+      leftR -= dr; leftC -= dc;
+    }
+
+    let rightR = row, rightC = col;
+    while (this.isInside(size, rightR + dr, rightC + dc) && board[rightR + dr][rightC + dc] === player) {
+      rightR += dr; rightC += dc;
+    }
+
+    // 计算连续己子数
+    let count = 1;
+    let tr = leftR, tc = leftC;
+    while (!(tr === rightR && tc === rightC)) {
+      count++;
+      tr += dr; tc += dc;
+    }
+
+    if (count !== 4) return false;
+
+    // 检查两端是否都是空位
+    const leftEmpty = this.isInside(size, leftR - dr, leftC - dc) && board[leftR - dr][leftC - dc] === 0;
+    const rightEmpty = this.isInside(size, rightR + dr, rightC + dc) && board[rightR + dr][rightC + dc] === 0;
+
+    return leftEmpty && rightEmpty;
+  }
+
+  // 检查一行棋型中是否包含活四
+  isLiveFourInLine(line, player) {
+    // 寻找连续4个己子，且两端都是空位
+    for (let i = 0; i <= line.length - 4; i++) {
+      let count = 0;
+      for (let j = 0; j < 4; j++) {
+        if (line[i + j] === player) count++;
+      }
+      if (count === 4) {
+        const leftEmpty = i > 0 && line[i - 1] === 0;
+        const rightEmpty = i + 4 < line.length && line[i + 4] === 0;
+        if (leftEmpty && rightEmpty) return true;
+      }
+    }
+    return false;
+  }
+
+  // 简化的活四检测（假设棋子已落下）
+  isLiveFourSimple(board, size, row, col, dr, dc, player) {
+    // 向两端数连续棋子
+    let count = 1;
+    let leftEmpty = false;
+    let rightEmpty = false;
+
+    let r = row + dr, c = col + dc;
+    while (this.isInside(size, r, c) && board[r][c] === player) {
+      count++;
+      r += dr; c += dc;
+    }
+    if (this.isInside(size, r, c) && board[r][c] === 0) rightEmpty = true;
+
+    r = row - dr; c = col - dc;
+    while (this.isInside(size, r, c) && board[r][c] === player) {
+      count++;
+      r -= dr; c -= dc;
+    }
+    if (this.isInside(size, r, c) && board[r][c] === 0) leftEmpty = true;
+
+    return count >= 4 && leftEmpty && rightEmpty;
+  }
+
+  // 获取某方向上的棋型字符串（用于调试和分析）
+  getLinePattern(board, size, row, col, dr, dc, player) {
+    // 收集以 (row,col) 为中心，向两边各延伸4格的棋型
+    let pattern = [];
+    for (let i = -4; i <= 4; i++) {
+      const r = row + i * dr;
+      const c = col + i * dc;
+      if (!this.isInside(size, r, c)) {
+        pattern.push('X'); // 边界
+      } else if (board[r][c] === player) {
+        pattern.push('O');
+      } else if (board[r][c] === 0) {
+        pattern.push('_');
+      } else {
+        pattern.push('X'); // 对方棋子
+      }
+    }
+    return pattern.join('');
+  }
+
+  // 检测是否为"四"（冲四或活四）
+  // 四的定义：再下一子就能形成五连
+  isFour(board, size, row, col, dr, dc, player) {
+    const original = board[row][col];
+    board[row][col] = player;
+
+    let result = false;
+
+    // 方法：检查在这个方向上是否存在一个空位，填入后形成五连
+    for (let offset = -4; offset <= 0; offset++) {
+      let ownCount = 0;
+      let emptyCount = 0;
+      let valid = true;
+
+      for (let i = 0; i < 5; i++) {
+        const r = row + (offset + i) * dr;
+        const c = col + (offset + i) * dc;
+        if (!this.isInside(size, r, c)) { valid = false; break; }
+        const cell = board[r][c];
+        if (cell === player) ownCount++;
+        else if (cell === 0) emptyCount++;
+        else { valid = false; break; }
+      }
+
+      if (valid && ownCount === 4 && emptyCount === 1) {
+        result = true;
+        break;
+      }
+    }
+
+    board[row][col] = original;
+    return result;
+  }
+
+  // 检测三三禁手：落子后同时形成两个或以上的活三
+  isThreeThreeForbidden(board, size, row, col, player) {
+    if (player !== this.BLACK) return false; // 只有黑棋有禁手
+
+    // 先检查是否形成五连，如果五连则不是禁手
+    const original = board[row][col];
+    board[row][col] = player;
+    if (this.hasFive(board, size, row, col, player)) {
+      board[row][col] = original;
+      return false;
+    }
+    board[row][col] = original;
+
+    let liveThreeCount = 0;
+    for (const [dr, dc] of this.dirs) {
+      if (this.isLiveThree(board, size, row, col, dr, dc, player)) {
+        liveThreeCount++;
+      }
+    }
+
+    return liveThreeCount >= 2;
+  }
+
+  // 检测四四禁手：落子后同时形成两个或以上的四
+  isFourFourForbidden(board, size, row, col, player) {
+    if (player !== this.BLACK) return false; // 只有黑棋有禁手
+
+    // 先检查是否形成五连，如果五连则不是禁手
+    const original = board[row][col];
+    board[row][col] = player;
+    if (this.hasFive(board, size, row, col, player)) {
+      board[row][col] = original;
+      return false;
+    }
+    board[row][col] = original;
+
+    let fourCount = 0;
+    for (const [dr, dc] of this.dirs) {
+      if (this.isFour(board, size, row, col, dr, dc, player)) {
+        fourCount++;
+      }
+    }
+
+    return fourCount >= 2;
+  }
+
+  // 综合检测：是否为禁手点
+  // 返回: { forbidden: bool, type: '33' | '44' | null }
+  checkForbiddenMove(board, row, col, player) {
+    if (player !== this.BLACK) return { forbidden: false, type: null };
+
+    const size = this.boardSize;
+    if (!this.isInside(size, row, col) || board[row][col] !== 0) {
+      return { forbidden: false, type: null };
+    }
+
+    // 先检查四四禁手（通常更严重）
+    if (this.isFourFourForbidden(board, size, row, col, player)) {
+      return { forbidden: true, type: '44' };
+    }
+
+    // 再检查三三禁手
+    if (this.isThreeThreeForbidden(board, size, row, col, player)) {
+      return { forbidden: true, type: '33' };
+    }
+
+    return { forbidden: false, type: null };
+  }
+
+  // 以下两个方法保留原页面游戏控制器需要的接口。
+  checkWinAt(board, row, col, player) {
+    return this.hasFive(board, this.boardSize, row, col, player);
+  }
+
+  getWinLine(board, row, col, player) {
+    const size = this.boardSize;
+    for (const [dr, dc] of this.dirs) {
+      const cells = [[row, col]];
+
+      let r = row + dr, c = col + dc;
+      while (this.isInside(size, r, c) && board[r][c] === player) {
+        cells.push([r, c]);
+        r += dr;
+        c += dc;
+      }
+
+      r = row - dr;
+      c = col - dc;
+      while (this.isInside(size, r, c) && board[r][c] === player) {
+        cells.unshift([r, c]);
+        r -= dr;
+        c -= dc;
+      }
+
+      if (cells.length >= 5) return cells;
+    }
+    return null;
+  }
+}
+
+// ==================== GAME CONTROLLER ====================
+class Game {
+  constructor(canvasId, options = {}) {
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    this.boardSize = options.boardSize || 15;
+    this.boardColor = options.boardColor || '#dcb35c';
+    this.difficulty = options.difficulty || 0;
+    this.playerFirst = options.playerFirst !== false;
+    this.isWatchMode = options.isWatchMode || false;
+    this.forbiddenRule = options.forbiddenRule !== false; // 禁手规则默认开启
+    this.debugMode = options.debugMode || null; // 'black' | 'white' | null
+    this.infiniteUndo = options.infiniteUndo || false; // 无限悔棋
+
+    this.board = [];
+    this.history = [];
+    this.currentPlayer = 1; // 1=black, 2=white
+    this.gameOver = false;
+    this.winner = 0;
+    this.winCells = [];
+    this.moveCount = 0;
+    this.ai = new GomokuAI(this.difficulty, this.boardSize, { forbiddenRule: this.forbiddenRule });
+    this.aiThinking = false;
+    this.undoRemaining = this.infiniteUndo ? 9999 : (this.difficulty === 3 ? 0 : 3);
+    this.playerColor = 1; // Player is black by default
+    this.lastMove = null;
+    this._forbiddenToastTimer = null;
+
+    this.cellSize = 0;
+    this.padding = 40;
+    this.hoverPos = null;
+    this.boardScale = 1.0;
+    this._aiTimer = null;
+    this._stopped = false;
+
+    this.initBoard();
+    this.resize();
+    this.bindEvents();
+    this.render();
+
+    // If AI goes first
+    if (!this.isWatchMode && !this.playerFirst) {
+      this.playerColor = 2;
+      setTimeout(() => this.aiMove(), 500);
+    }
+    if (this.isWatchMode) {
+      this.playerColor = 0; // No human player
+      setTimeout(() => this.aiMove(), 500);
+    }
+  }
+
+  initBoard() {
+    this.board = Array.from({ length: this.boardSize }, () => Array(this.boardSize).fill(0));
+    this.history = [];
+    this.gameOver = false;
+    this.winner = 0;
+    this.winCells = [];
+    this.moveCount = 0;
+    this.lastMove = null;
+  }
+
+  resize() {
+    const maxW = Math.min(window.innerWidth - 40, 650);
+    const maxH = Math.min(window.innerHeight - 200, 650);
+    const baseSize = Math.min(maxW, maxH);
+    const size = Math.round(baseSize * this.boardScale);
+    this.canvas.width = size;
+    this.canvas.height = size;
+    this.cellSize = (size - this.padding * 2) / (this.boardSize - 1);
+    this.render();
+  }
+
+  zoomIn() {
+    if (this.boardScale >= 1.8) return;
+    this.boardScale = Math.round((this.boardScale + 0.2) * 10) / 10;
+    this.resize();
+    sound.playClick();
+  }
+
+  zoomOut() {
+    if (this.boardScale <= 0.4) return;
+    this.boardScale = Math.round((this.boardScale - 0.2) * 10) / 10;
+    this.resize();
+    sound.playClick();
+  }
+
+  stop() {
+    this._stopped = true;
+    if (this._aiTimer) {
+      clearTimeout(this._aiTimer);
+      this._aiTimer = null;
+    }
+    if (this._keyHandler) {
+      window.removeEventListener('keydown', this._keyHandler);
+      this._keyHandler = null;
+    }
+  }
+
+  bindEvents() {
+    this.canvas.addEventListener('click', (e) => this.onClick(e));
+    this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+    this.canvas.addEventListener('mouseleave', () => { this.hoverPos = null; this.render(); });
+    window.addEventListener('resize', () => this.resize());
+    if (!this.isWatchMode) {
+      this._keyHandler = (e) => {
+        if (e.key === 'u' || e.key === 'U') this.undo();
+        if (e.key === 'r' || e.key === 'R') {
+          if (this.gameOver) {
+            document.getElementById('resultOverlay').classList.remove('show');
+            this.stop();
+            UI.startGame();
+          }
+        }
+      };
+      window.addEventListener('keydown', this._keyHandler);
+    }
+  }
+
+  getCellFromEvent(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const col = Math.round((x - this.padding) / this.cellSize);
+    const row = Math.round((y - this.padding) / this.cellSize);
+    if (row < 0 || row >= this.boardSize || col < 0 || col >= this.boardSize) return null;
+    const dx = x - (this.padding + col * this.cellSize);
+    const dy = y - (this.padding + row * this.cellSize);
+    if (Math.sqrt(dx * dx + dy * dy) > this.cellSize * 0.42) return null;
+    return { row, col };
+  }
+
+  onClick(e) {
+    if (this.gameOver) return;
+    if (this.isWatchMode) return;
+    const cell = this.getCellFromEvent(e);
+    if (!cell) return;
+    if (this.board[cell.row][cell.col] !== 0) return;
+
+    if (this.debugMode) {
+      // 调试模式：只能下调试方的棋子，且可以连续下
+      const debugPlayer = this.debugMode === 'black' ? 1 : 2;
+      this.placePiece(cell.row, cell.col, debugPlayer);
+    } else {
+      // 正常模式
+      if (this.aiThinking) return;
+      if (this.currentPlayer !== this.playerColor) return;
+      this.placePiece(cell.row, cell.col, this.playerColor);
+    }
+  }
+
+  onMouseMove(e) {
+    if (this.gameOver || this.isWatchMode) {
+      this.hoverPos = null;
+      return;
+    }
+    if (!this.debugMode && this.aiThinking) {
+      this.hoverPos = null;
+      return;
+    }
+    const cell = this.getCellFromEvent(e);
+    if (cell && this.board[cell.row][cell.col] === 0) {
+      this.hoverPos = cell;
+    } else {
+      this.hoverPos = null;
+    }
+    this.render();
+  }
+
+  placePiece(row, col, player) {
+    // 禁手规则检测（仅黑棋、且开启禁手规则时）
+    if (this.forbiddenRule && player === 1) {
+      const forbidden = this.ai.checkForbiddenMove(this.board, row, col, player);
+      if (forbidden.forbidden) {
+        // 显示禁手提示
+        this.showForbiddenToast(forbidden.type);
+        return false;
+      }
+    }
+
+    this.board[row][col] = player;
+    this.history.push({ row, col, player });
+    this.lastMove = { row, col };
+    this.moveCount++;
+    sound.playPlace();
+
+    if (this.ai.checkWinAt(this.board, row, col, player)) {
+      this.gameOver = true;
+      this.winner = player;
+      this.winCells = this.ai.getWinLine(this.board, row, col, player);
+      this.render();
+      this.onGameEnd();
+      return true;
+    }
+
+    if (this.moveCount >= this.boardSize * this.boardSize) {
+      this.gameOver = true;
+      this.winner = 0;
+      this.render();
+      this.onGameEnd();
+      return true;
+    }
+
+    this.currentPlayer = player === 1 ? 2 : 1;
+    this.render();
+    this.updateUI();
+    this.updateMoveHistory();
+
+    // 调试模式：不切换回对方，继续让玩家下同一方
+    if (this.debugMode) {
+      const debugPlayer = this.debugMode === 'black' ? 1 : 2;
+      this.currentPlayer = debugPlayer;
+      this.updateUI();
+      return true;
+    }
+
+    // Trigger AI move if it's AI's turn (player-vs-AI mode only)
+    if (!this.isWatchMode && !this.gameOver && this.currentPlayer !== this.playerColor) {
+      this.aiMove();
+    }
+    return true;
+  }
+
+  // 显示禁手提示
+  showForbiddenToast(type) {
+    const toast = document.getElementById('forbiddenToast');
+    if (!toast) {
+      // 创建提示元素
+      const el = document.createElement('div');
+      el.id = 'forbiddenToast';
+      el.style.cssText = `
+        position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+        background: rgba(255, 70, 70, 0.95); color: #fff;
+        padding: 12px 28px; border-radius: 8px;
+        font-size: 15px; font-weight: 600; z-index: 10000;
+        box-shadow: 0 4px 20px rgba(255, 70, 70, 0.5);
+        opacity: 0; transition: opacity 0.3s, top 0.3s;
+        pointer-events: none; letter-spacing: 1px;
+      `;
+      document.body.appendChild(el);
+    }
+
+    const el = document.getElementById('forbiddenToast');
+    const text = type === '33' ? '违反三三禁手规则！请重新落子' : '违反四四禁手规则！请重新落子';
+    el.textContent = text;
+    el.style.opacity = '1';
+    el.style.top = '100px';
+
+    if (this._forbiddenToastTimer) {
+      clearTimeout(this._forbiddenToastTimer);
+    }
+    this._forbiddenToastTimer = setTimeout(() => {
+      el.style.opacity = '0';
+      el.style.top = '80px';
+    }, 1500);
+  }
+
+  aiMove() {
+    if (this.gameOver || this._stopped) return;
+    this.aiThinking = true;
+    this.render();
+    this.updateUI();
+
+    this._aiTimer = setTimeout(() => {
+      if (this._stopped) return;
+      const [row, col] = this.ai.getBestMove(
+        this.board.map(r => [...r]),
+        this.currentPlayer
+      );
+      if (this._stopped) return;
+      this.aiThinking = false;
+      this.placePiece(row, col, this.currentPlayer);
+      this.updateUI();
+      if (!this.gameOver && this.isWatchMode && !this._stopped) {
+        this._aiTimer = setTimeout(() => this.aiMove(), 400);
+      }
+    }, this.isWatchMode ? 300 : 200);
+  }
+
+  undo() {
+    if (this.gameOver || this.aiThinking) return;
+    if (this.isWatchMode) return;
+    if (this.undoRemaining <= 0 && !this.infiniteUndo) return;
+
+    if (this.debugMode) {
+      // 调试模式：只悔一步
+      if (this.history.length < 1) return;
+      const last = this.history.pop();
+      this.board[last.row][last.col] = 0;
+      this.moveCount--;
+      if (!this.infiniteUndo) this.undoRemaining--;
+      this.lastMove = this.history.length > 0 ? this.history[this.history.length - 1] : null;
+      const debugPlayer = this.debugMode === 'black' ? 1 : 2;
+      this.currentPlayer = debugPlayer;
+      this.winCells = [];
+      this.gameOver = false;
+      this.winner = 0;
+      this.render();
+      this.updateUI();
+      this.updateMoveHistory();
+      sound.playClick();
+    } else {
+      // 正常模式：悔两步（AI + 玩家）
+      if (this.history.length < 2) return;
+      const last = this.history.pop();
+      this.board[last.row][last.col] = 0;
+      const secondLast = this.history.pop();
+      this.board[secondLast.row][secondLast.col] = 0;
+
+      this.moveCount -= 2;
+      if (!this.infiniteUndo) this.undoRemaining--;
+      this.lastMove = this.history.length > 0 ? this.history[this.history.length - 1] : null;
+      this.currentPlayer = this.playerColor;
+      this.winCells = [];
+      this.render();
+      this.updateUI();
+      this.updateMoveHistory();
+      sound.playClick();
+    }
+  }
+
+  onGameEnd() {
+    if (this.winner === this.playerColor) {
+      sound.playWin();
+    } else if (this.winner !== 0) {
+      sound.playLose();
+    }
+    if (this.isWatchMode) {
+      this.onWatchGameEnd();
+    } else {
+      this.showResult();
+    }
+    this.updateUI();
+  }
+
+  showResult() {
+    const overlay = document.getElementById('resultOverlay');
+    const text = document.getElementById('resultText');
+    const sub = document.getElementById('resultSub');
+    overlay.classList.add('show');
+    if (this.winner === 0) {
+      text.textContent = '平局！';
+      text.style.color = '#ffd700';
+      sub.textContent = '棋盘已满，握手言和';
+    } else if (this.winner === this.playerColor) {
+      text.textContent = '你赢了！';
+      text.style.color = '#4ecdc4';
+      sub.textContent = '恭喜获胜！';
+    } else {
+      text.textContent = 'AI 获胜';
+      text.style.color = '#ff6b6b';
+      sub.textContent = '再接再厉！';
+    }
+  }
+
+  onWatchGameEnd() {
+    if (this._stopped) return;
+    if (this.winner === 1) {
+      document.getElementById('blackWinCount').textContent =
+        parseInt(document.getElementById('blackWinCount').textContent) + 1;
+    } else if (this.winner === 2) {
+      document.getElementById('whiteWinCount').textContent =
+        parseInt(document.getElementById('whiteWinCount').textContent) + 1;
+    } else {
+      document.getElementById('drawCount').textContent =
+        parseInt(document.getElementById('drawCount').textContent) + 1;
+    }
+
+    setTimeout(() => {
+      this.initBoard();
+      this.currentPlayer = 1;
+      this.render();
+      this.updateUI();
+      setTimeout(() => this.aiMove(), 400);
+    }, 1500);
+  }
+
+  updateUI() {
+    if (this.isWatchMode) {
+      document.getElementById('watchMoveCount').textContent = `第 ${this.moveCount} 手`;
+      const status = document.getElementById('watchStatus');
+      if (this.gameOver) {
+        if (this.winner === 1) status.textContent = '黑棋获胜！即将开始下一局...';
+        else if (this.winner === 2) status.textContent = '白棋获胜！即将开始下一局...';
+        else status.textContent = '平局！即将开始下一局...';
+      } else {
+        status.textContent = this.aiThinking ? 'AI 思考中...' : `AI 对战中... (${this.moveCount}手)`;
+      }
+    } else {
+      const turnText = document.getElementById('gameTurnText');
+      const turnDot = document.getElementById('turnDot');
+      const moveCount = document.getElementById('moveCount');
+      moveCount.textContent = `第 ${this.moveCount} 手`;
+      if (this.gameOver) {
+        turnText.textContent = this.winner === 0 ? '平局' : (this.winner === this.playerColor ? '你赢了！' : 'AI 获胜');
+        turnDot.className = 'piece-dot ' + (this.winner === 1 ? 'black' : this.winner === 2 ? 'white' : '');
+      } else if (this.debugMode) {
+        turnText.textContent = this.debugMode === 'black' ? '调试模式·黑棋' : '调试模式·白棋';
+        turnDot.className = 'piece-dot ' + (this.debugMode === 'black' ? 'black' : 'white');
+      } else if (this.aiThinking) {
+        turnText.textContent = 'AI 思考中...';
+        turnDot.className = 'piece-dot ' + (this.currentPlayer === 1 ? 'black' : 'white');
+      } else {
+        turnText.textContent = '你的回合';
+        turnDot.className = 'piece-dot ' + (this.playerColor === 1 ? 'black' : 'white');
+      }
+      const undoBtn = document.getElementById('undoBtn');
+      const undoCountEl = document.getElementById('undoCount');
+      undoCountEl.textContent = this.infiniteUndo ? '∞' : this.undoRemaining;
+      const minHistory = this.debugMode ? 1 : 2;
+      undoBtn.disabled = this.gameOver || this.aiThinking || (!this.infiniteUndo && this.undoRemaining <= 0) || this.history.length < minHistory;
+    }
+  }
+
+  updateMoveHistory() {
+    const panel = document.getElementById('moveHistory');
+    if (!panel || this.isWatchMode) return;
+    // Clear existing items
+    const existing = panel.querySelectorAll('.mh-item');
+    existing.forEach(el => el.remove());
+    // Show last 12 moves
+    const recent = this.history.slice(-12);
+    recent.forEach((h, i) => {
+      const span = document.createElement('span');
+      span.className = 'mh-item';
+      const colName = String.fromCharCode(65 + h.col);
+      const rowName = this.boardSize - h.row;
+      span.textContent = (i + 1) + '.' + colName + rowName;
+      span.classList.add(h.player === 1 ? 'black-move' : 'white-move');
+      if (i === recent.length - 1) span.classList.add('last-move');
+      panel.insertBefore(span, panel.querySelector('.shortcut-hint'));
+    });
+  }
+
+  render() {
+    const ctx = this.ctx;
+    const size = this.canvas.width;
+    const pad = this.padding;
+    const cs = this.cellSize;
+
+    ctx.clearRect(0, 0, size, size);
+
+    // Board background
+    ctx.fillStyle = this.boardColor;
+    ctx.fillRect(0, 0, size, size);
+
+    // Wood grain texture effect
+    ctx.globalAlpha = 0.06;
+    for (let i = 0; i < size; i += 4) {
+      ctx.fillStyle = i % 8 < 4 ? '#000' : '#fff';
+      ctx.fillRect(0, i, size, 3);
+    }
+    ctx.globalAlpha = 1;
+
+    // Grid lines
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 0.8;
+    for (let i = 0; i < this.boardSize; i++) {
+      const pos = pad + i * cs;
+      ctx.beginPath();
+      ctx.moveTo(pad, pos);
+      ctx.lineTo(pad + (this.boardSize - 1) * cs, pos);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pos, pad);
+      ctx.lineTo(pos, pad + (this.boardSize - 1) * cs);
+      ctx.stroke();
+    }
+
+    // Star points
+    const starPoints = this.getStarPoints();
+    for (const [r, c] of starPoints) {
+      const x = pad + c * cs, y = pad + r * cs;
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.arc(x, y, cs * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Pieces
+    for (let r = 0; r < this.boardSize; r++) {
+      for (let c = 0; c < this.boardSize; c++) {
+        if (this.board[r][c] !== 0) {
+          this.drawPiece(r, c, this.board[r][c]);
+        }
+      }
+    }
+
+    // Win line highlight
+    if (this.winCells && this.winCells.length > 0) {
+      for (const [r, c] of this.winCells) {
+        const x = pad + c * cs, y = pad + r * cs;
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#ffd700';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(x, y, cs * 0.38, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    // Last move marker
+    if (this.lastMove && !this.gameOver) {
+      const x = pad + this.lastMove.col * cs, y = pad + this.lastMove.row * cs;
+      ctx.fillStyle = '#ff4444';
+      ctx.beginPath();
+      ctx.arc(x, y, cs * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Hover preview
+    if (this.hoverPos && !this.gameOver && this.board[this.hoverPos.row][this.hoverPos.col] === 0) {
+      const x = pad + this.hoverPos.col * cs, y = pad + this.hoverPos.row * cs;
+      ctx.globalAlpha = 0.4;
+      if (this.debugMode) {
+        const debugPlayer = this.debugMode === 'black' ? 1 : 2;
+        this.drawPiece(this.hoverPos.row, this.hoverPos.col, debugPlayer);
+      } else if (!this.aiThinking) {
+        this.drawPiece(this.hoverPos.row, this.hoverPos.col, this.playerColor);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  drawPiece(row, col, player) {
+    const ctx = this.ctx;
+    const x = this.padding + col * this.cellSize;
+    const y = this.padding + row * this.cellSize;
+    const r = this.cellSize * 0.42;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.arc(x + 2, y + 2, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Piece
+    const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+    if (player === 1) {
+      grad.addColorStop(0, '#666');
+      grad.addColorStop(1, '#111');
+    } else {
+      grad.addColorStop(0, '#fff');
+      grad.addColorStop(1, '#bbb');
+    }
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Highlight
+    ctx.fillStyle = player === 1 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.4)';
+    ctx.beginPath();
+    ctx.arc(x - r * 0.25, y - r * 0.3, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  getStarPoints() {
+    const size = this.boardSize;
+    if (size === 15) {
+      return [[3,3],[3,7],[3,11],[7,3],[7,7],[7,11],[11,3],[11,7],[11,11]];
+    }
+    if (size === 19) {
+      return [[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]];
+    }
+    if (size === 13) {
+      return [[3,3],[3,6],[3,9],[6,3],[6,6],[6,9],[9,3],[9,6],[9,9]];
+    }
+    if (size === 17) {
+      return [[3,3],[3,8],[3,13],[8,3],[8,8],[8,13],[13,3],[13,8],[13,13]];
+    }
+    return [];
+  }
+}
+
+// ==================== UI MANAGER ====================
+const UI = {
+  difficulty: 0,
+  boardSize: 15,
+  boardColor: '#dcb35c',
+  firstMove: 'black',
+  randomMode: false,
+  forbiddenRule: true,
+  game: null,
+  watchGame: null,
+  // 神秘菜单
+  _titleClickCount: 0,
+  _titleClickTimer: null,
+  secretUnlocked: false,
+  infiniteUndo: false,
+  disableForbidden: false,
+  debugMode: null, // null | 'black' | 'white'
+
+  init() {
+    this.createParticles();
+    this.bindMenuEvents();
+    this.bindGameEvents();
+    this.bindWatchEvents();
+    this.simulateLoading();
+  },
+
+  createParticles() {
+    const container = document.getElementById('loadingParticles');
+    const colors = ['#4ecdc4', '#a855f7', '#ff6b6b', '#ffd700', '#60a5fa'];
+    for (let i = 0; i < 50; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = Math.random() * 100 + '%';
+      p.style.width = p.style.height = (Math.random() * 4 + 2) + 'px';
+      p.style.background = colors[Math.floor(Math.random() * colors.length)];
+      p.style.animationDuration = (Math.random() * 4 + 3) + 's';
+      p.style.animationDelay = Math.random() * 3 + 's';
+      container.appendChild(p);
+    }
+  },
+
+  simulateLoading() {
+    const percent = document.getElementById('loadingPercent');
+    let p = 0;
+    const interval = setInterval(() => {
+      p += Math.random() * 8 + 2;
+      if (p >= 100) { p = 100; clearInterval(interval); }
+      percent.textContent = Math.floor(p) + '%';
+    }, 80);
+
+    setTimeout(() => {
+      document.getElementById('loading-screen').classList.add('hidden');
+      document.getElementById('menu-screen').classList.add('active');
+    }, 2600);
+  },
+
+  bindMenuEvents() {
+    // Difficulty - 点击标题5次触发神秘菜单
+    document.getElementById('difficultyTitle').addEventListener('click', () => {
+      sound.playClick();
+      this._titleClickCount++;
+      if (this._titleClickTimer) clearTimeout(this._titleClickTimer);
+      this._titleClickTimer = setTimeout(() => {
+        this._titleClickCount = 0;
+      }, 2000);
+
+      if (this._titleClickCount >= 5) {
+        this._titleClickCount = 0;
+        if (this.secretUnlocked) {
+          this.showSecretMenu();
+        } else {
+          this.showPasswordModal();
+        }
+      }
+    });
+
+    document.querySelectorAll('.diff-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        sound.playClick();
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        this.difficulty = parseInt(btn.dataset.diff);
+      });
+    });
+
+    // Board size
+    document.querySelectorAll('.size-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        sound.playClick();
+        document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        this.boardSize = parseInt(btn.dataset.size);
+      });
+    });
+
+    // Board color
+    document.querySelectorAll('.color-preset').forEach(el => {
+      el.addEventListener('click', () => {
+        sound.playClick();
+        document.querySelectorAll('.color-preset').forEach(e => e.classList.remove('selected'));
+        el.classList.add('selected');
+        this.boardColor = el.dataset.color;
+        document.getElementById('customBoardColor').value = this.boardColor;
+      });
+    });
+    document.getElementById('customBoardColor').addEventListener('input', (e) => {
+      document.querySelectorAll('.color-preset').forEach(el => el.classList.remove('selected'));
+      this.boardColor = e.target.value;
+    });
+
+    // First move
+    document.querySelectorAll('.first-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        sound.playClick();
+        document.querySelectorAll('.first-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        this.firstMove = btn.dataset.first;
+        this.randomMode = this.firstMove === 'random';
+        document.getElementById('randomHint').style.display = this.randomMode ? 'block' : 'none';
+      });
+    });
+
+    // Sound toggles
+    document.getElementById('clickSoundToggle').addEventListener('change', (e) => {
+      sound.clickEnabled = e.target.checked;
+    });
+    document.getElementById('placeSoundToggle').addEventListener('change', (e) => {
+      sound.placeEnabled = e.target.checked;
+    });
+    document.getElementById('winSoundToggle').addEventListener('change', (e) => {
+      sound.winEnabled = e.target.checked;
+    });
+
+    // 禁手规则
+    document.getElementById('forbiddenRuleToggle').addEventListener('change', (e) => {
+      sound.playClick();
+      this.forbiddenRule = e.target.checked;
+    });
+
+    // Start game
+    document.getElementById('startGameBtn').addEventListener('click', () => {
+      sound.playClick();
+      this.startGame();
+    });
+
+    // Watch AI
+    document.getElementById('watchAIBtn').addEventListener('click', () => {
+      sound.playClick();
+      this.startWatch();
+    });
+  },
+
+  bindGameEvents() {
+    document.getElementById('undoBtn').addEventListener('click', () => {
+      if (this.game) this.game.undo();
+    });
+    document.getElementById('backToMenuBtn').addEventListener('click', () => {
+      sound.playClick();
+      if (this.game) { this.game.stop(); this.game = null; }
+      this.backToMenu();
+    });
+    document.getElementById('playAgainBtn').addEventListener('click', () => {
+      sound.playClick();
+      document.getElementById('resultOverlay').classList.remove('show');
+      if (this.game) { this.game.stop(); }
+      this.startGame();
+    });
+    document.getElementById('gameZoomInBtn').addEventListener('click', () => {
+      if (this.game) this.game.zoomIn();
+    });
+    document.getElementById('gameZoomOutBtn').addEventListener('click', () => {
+      if (this.game) this.game.zoomOut();
+    });
+  },
+
+  bindWatchEvents() {
+    document.getElementById('exitWatchBtn').addEventListener('click', () => {
+      sound.playClick();
+      if (this.watchGame) {
+        this.watchGame.stop();
+        this.watchGame = null;
+      }
+      document.getElementById('watch-screen').classList.remove('active');
+      document.getElementById('menu-screen').classList.add('active');
+    });
+    document.getElementById('watchZoomInBtn').addEventListener('click', () => {
+      if (this.watchGame) this.watchGame.zoomIn();
+    });
+    document.getElementById('watchZoomOutBtn').addEventListener('click', () => {
+      if (this.watchGame) this.watchGame.zoomOut();
+    });
+  },
+
+  startGame() {
+    document.getElementById('menu-screen').classList.remove('active');
+    document.getElementById('game-screen').classList.add('active');
+    document.getElementById('resultOverlay').classList.remove('show');
+
+    let playerFirst;
+    if (this.randomMode) {
+      playerFirst = Math.random() < 0.5;
+      this.firstMove = playerFirst ? 'black' : 'white';
+    } else {
+      playerFirst = this.firstMove === 'black';
+    }
+
+    // 禁手规则：如果神秘菜单中关闭了禁手，则全局关闭
+    const effectiveForbidden = this.disableForbidden ? false : this.forbiddenRule;
+
+    this.game = new Game('gameCanvas', {
+      boardSize: this.boardSize,
+      boardColor: this.boardColor,
+      difficulty: this.difficulty,
+      playerFirst: playerFirst,
+      isWatchMode: false,
+      forbiddenRule: effectiveForbidden,
+      infiniteUndo: this.infiniteUndo
+    });
+
+    const undoCount = document.getElementById('undoCount');
+    undoCount.textContent = this.infiniteUndo ? '∞' : (this.difficulty === 3 ? 0 : 3);
+    document.getElementById('undoBtn').disabled = this.difficulty === 3 && !this.infiniteUndo;
+  },
+
+  startWatch() {
+    document.getElementById('menu-screen').classList.remove('active');
+    document.getElementById('watch-screen').classList.add('active');
+    document.getElementById('blackWinCount').textContent = '0';
+    document.getElementById('whiteWinCount').textContent = '0';
+    document.getElementById('drawCount').textContent = '0';
+    document.getElementById('watchStatus').textContent = 'AI 对战中...';
+
+    // 禁手规则：如果神秘菜单中关闭了禁手，则全局关闭
+    const effectiveForbidden = this.disableForbidden ? false : this.forbiddenRule;
+
+    this.watchGame = new Game('watchCanvas', {
+      boardSize: this.boardSize,
+      boardColor: this.boardColor,
+      difficulty: this.difficulty,
+      playerFirst: true,
+      isWatchMode: true,
+      forbiddenRule: effectiveForbidden
+    });
+  },
+
+  backToMenu() {
+    this.game = null;
+    this.debugMode = null;
+    document.getElementById('game-screen').classList.remove('active');
+    document.getElementById('menu-screen').classList.add('active');
+  },
+
+  // ============ 神秘菜单 ============
+  showPasswordModal() {
+    const modal = document.getElementById('passwordModal');
+    modal.style.display = 'flex';
+    const input = document.getElementById('passwordInput');
+    input.value = '';
+    setTimeout(() => input.focus(), 100);
+
+    const confirm = () => {
+      const password = document.getElementById('passwordInput').value;
+      if (password === 'hycnbnbnnb') {
+        this.secretUnlocked = true;
+        modal.style.display = 'none';
+        this.showSecretMenu();
+        sound.playWin();
+      } else {
+        // 错误提示
+        const input = document.getElementById('passwordInput');
+        input.style.borderColor = '#ff6b6b';
+        input.style.animation = 'none';
+        setTimeout(() => { input.style.animation = ''; }, 10);
+        sound.playLose();
+        setTimeout(() => {
+          input.style.borderColor = '';
+        }, 500);
+      }
+    };
+
+    document.getElementById('passwordConfirmBtn').onclick = confirm;
+    document.getElementById('passwordCancelBtn').onclick = () => {
+      modal.style.display = 'none';
+    };
+    document.getElementById('passwordInput').onkeydown = (e) => {
+      if (e.key === 'Enter') confirm();
+    };
+  },
+
+  showSecretMenu() {
+    const modal = document.getElementById('secretMenuModal');
+    modal.style.display = 'flex';
+    sound.playClick();
+
+    // 同步开关状态
+    document.getElementById('infiniteUndoToggle').checked = this.infiniteUndo;
+    document.getElementById('disableForbiddenToggle').checked = this.disableForbidden;
+
+    // 无限悔棋开关
+    document.getElementById('infiniteUndoToggle').onchange = (e) => {
+      this.infiniteUndo = e.target.checked;
+      sound.playClick();
+    };
+
+    // 关闭禁手规则开关
+    document.getElementById('disableForbiddenToggle').onchange = (e) => {
+      this.disableForbidden = e.target.checked;
+      sound.playClick();
+    };
+
+    // 调试黑棋
+    document.getElementById('debugBlackBtn').onclick = () => {
+      this.debugMode = 'black';
+      modal.style.display = 'none';
+      sound.playClick();
+      this.startDebugGame();
+    };
+
+    // 调试白棋
+    document.getElementById('debugWhiteBtn').onclick = () => {
+      this.debugMode = 'white';
+      modal.style.display = 'none';
+      sound.playClick();
+      this.startDebugGame();
+    };
+
+    // 关闭按钮
+    document.getElementById('secretMenuCloseBtn').onclick = () => {
+      modal.style.display = 'none';
+      sound.playClick();
+    };
+  },
+
+  // 开始调试对局
+  startDebugGame() {
+    document.getElementById('menu-screen').classList.remove('active');
+    document.getElementById('game-screen').classList.add('active');
+    document.getElementById('resultOverlay').classList.remove('show');
+
+    const playerFirst = this.debugMode === 'black';
+
+    this.game = new Game('gameCanvas', {
+      boardSize: this.boardSize,
+      boardColor: this.boardColor,
+      difficulty: this.difficulty,
+      playerFirst: playerFirst,
+      isWatchMode: false,
+      forbiddenRule: !this.disableForbidden,
+      debugMode: this.debugMode,
+      infiniteUndo: this.infiniteUndo
+    });
+
+    document.getElementById('undoCount').textContent = this.infiniteUndo ? '∞' : 3;
+    document.getElementById('undoBtn').disabled = false;
+  },
+};
+
+// ==================== INIT ====================
+document.addEventListener('DOMContentLoaded', () => UI.init());
+</script>
+</body>
+</html>
